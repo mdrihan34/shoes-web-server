@@ -48,6 +48,7 @@ const client = new MongoClient(uri, {
 
 const userCollection = client.db('QuickMark').collection('users');
 const productCollection = client.db('QuickMark').collection('product');
+const cardCollection = client.db('QuickMark').collection('cart');
 
 // Register user route
 
@@ -157,7 +158,7 @@ async function run() {
           return res.status(400).send({ message: "All fields are required!" });
         }
     
-        // Save product information into the database
+       
         const product = {
           name: Name,
           price: Price,
@@ -165,8 +166,8 @@ async function run() {
           userName: userName,
           userEmail: userEmail,
           userProfilePicture: userProfile,
-          productImage: `/uploads/${req.file.filename}`, // Save the image path in the DB
-          createdAt: new Date() // Add the current date and time when the product is uploaded
+          productImage: `/uploads/${req.file.filename}`, 
+          createdAt: new Date()
         };
     
         // Insert into the MongoDB product collection
@@ -178,6 +179,35 @@ async function run() {
         res.status(500).send({ message: "Failed to upload product", error: error.message });
       }
     });
+//  Add to card api create 
+app.post("/addToCart", async (req, res) => {
+  const { userEmail, name, price, productImage } = req.body;
+
+  // Validate the request body
+  if (!userEmail || !name || !price || !productImage) {
+    return res.status(400).json({ message: "All fields are required" });
+  }
+
+  try {
+    // Assuming you have a MongoDB collection named 'cartCollection'
+    
+
+    // Create the item object to insert
+    const newCartItem = { userEmail, name, price, productImage };
+
+    // Insert the item into the database
+    const result = await cardCollection.insertOne(newCartItem);
+
+    // Respond with success message
+    res.status(201).json({ 
+      message: "Item added to cart successfully!", 
+      itemId: result.insertedId 
+    });
+  } catch (error) {
+    console.error("Error adding to cart:", error);
+    res.status(500).json({ message: "Failed to add to cart" });
+  }
+});
 
     app.get("/user-products", async (req, res) => {
       try {
@@ -202,6 +232,7 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch user products", error: error.message });
       }
     });
+ 
     app.put("/user-products/:id", async (req, res) => {
       const id = req.params.id; // প্রোডাক্ট ID
       const { name, price, description } = req.body; 
@@ -260,6 +291,30 @@ async function run() {
       res.status(500).send({ message: 'Error fetching featured products' });
     }
   });
+     // cart api 
+     app.get("/carts", async (req, res) => {
+      const email = req.query.email; // Extract email from query parameters
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+      try {
+        const query = { userEmail: email }; // Match documents where `userEmail` matches
+        const result = await cardCollection.find(query).toArray(); // Fetch all matching documents
+        res.send({ products: result }); // Return as a list
+      } catch (error) {
+        console.error("Failed to fetch cart items:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+    app.delete("/carts/:id", async(req,res)=>{
+      const id = req.params.id;
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({ error: "Invalid ID format" });
+      }
+      const query = { _id: new ObjectId(id) };
+      const result = await cardCollection.deleteOne(query);
+      res.send(result);
+     })
     await client.connect();
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
