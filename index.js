@@ -240,11 +240,26 @@ async function run() {
     res.send(result)
     })
   //  all product api 
-  app.get('/products', async(req,res)=>{
+  app.get('/products/', async(req,res)=>{
     const cursor = productCollection.find()
     const result = await cursor.toArray()
     res.send(result)
   })
+  app.get("/products/:id", async(req,res)=>{
+    const id = req.params.id
+    const query = {_id: new ObjectId(id)}
+    const result = await productCollection.findOne(query)
+   res.send(result)
+   })
+  app.get('/featured-products', async (req, res) => {
+    try {
+      const result = await productCollection.find({}).limit(6).toArray();
+      res.send(result); // Directly send the result
+    } catch (error) {
+      console.error('Error fetching featured products:', error);
+      res.status(500).send({ message: 'Error fetching featured products' });
+    }
+  });
     await client.connect();
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
