@@ -49,6 +49,7 @@ const client = new MongoClient(uri, {
 const userCollection = client.db('QuickMark').collection('users');
 const productCollection = client.db('QuickMark').collection('product');
 const cardCollection = client.db('QuickMark').collection('cart');
+const orderCollection = client.db('QuickMark').collection('orders');
 
 // Register user route
 
@@ -83,6 +84,50 @@ async function run() {
       const result = await cursor.toArray()
       res.send(result)
     })
+    // Update user role API
+app.put('/users/:id', async (req, res) => {
+  const id = req.params.id;
+  const { role } = req.body; // Expects role in the request body, e.g., { role: "Seller" }
+  const query = { _id: new ObjectId(id) };
+  const updateDoc = {
+    $set: {
+      role: role, // Set the role to "Seller"
+    },
+  };
+
+  try {
+    const result = await userCollection.updateOne(query, updateDoc);
+    if (result.modifiedCount > 0) {
+      res.status(200).send({ success: true, message: "User role updated successfully." });
+    } else {
+      res.status(404).send({ success: false, message: "User not found or no changes made." });
+    }
+  } catch (error) {
+    console.error("Error updating user role:", error);
+    res.status(500).send({ success: false, message: "Failed to update user role." });
+  }
+});
+
+// Delete user API
+app.delete('/users/:id', async (req, res) => {
+  const id = req.params.id;
+  const query = { _id: new ObjectId(id) };
+
+  try {
+    const result = await userCollection.deleteOne(query);
+    if (result.deletedCount > 0) {
+      res.status(200).send({ success: true, message: "User deleted successfully." });
+    } else {
+      res.status(404).send({ success: false, message: "User not found." });
+    }
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    res.status(500).send({ success: false, message: "Failed to delete user." });
+  }
+});
+
+
+
     app.get('/current-user', async (req, res) => {
       const email = req.query.email; 
       if (!email) {
@@ -180,11 +225,12 @@ async function run() {
       }
     });
 //  Add to card api create 
+
 app.post("/addToCart", async (req, res) => {
-  const { userEmail, name, price, productImage } = req.body;
+  const { userEmail, name, price, productImage ,sellerEmail } = req.body;
 
   // Validate the request body
-  if (!userEmail || !name || !price || !productImage) {
+  if (!userEmail || !name || !price || !productImage || !sellerEmail) {
     return res.status(400).json({ message: "All fields are required" });
   }
 
@@ -193,7 +239,7 @@ app.post("/addToCart", async (req, res) => {
     
 
     // Create the item object to insert
-    const newCartItem = { userEmail, name, price, productImage };
+    const newCartItem = { userEmail, name, price, productImage ,sellerEmail};
 
     // Insert the item into the database
     const result = await cardCollection.insertOne(newCartItem);
@@ -206,6 +252,134 @@ app.post("/addToCart", async (req, res) => {
   } catch (error) {
     console.error("Error adding to cart:", error);
     res.status(500).json({ message: "Failed to add to cart" });
+  }
+});
+app.post("/orders", async (req, res) => {
+  const { BuyerEmail, name, address, OrderEmail ,sellerEmail , Status,  OrderName , phone , zip,totalPrice} = req.body;
+
+  // Validate the request body
+  if (!BuyerEmail || !name || !address || !OrderEmail || !sellerEmail || !OrderName || !phone || !zip || !totalPrice || !Status) {
+    return res.status(400).json({ message: "All fields are required" });
+  }
+
+  try {
+    // Assuming you have a MongoDB collection named 'cartCollection'
+    
+
+    // Create the item object to insert
+    const orderItem = { BuyerEmail, name, address, OrderEmail ,sellerEmail , Status,  OrderName , phone , zip,totalPrice ,
+      createdAt: new Date()
+    }
+
+    // Insert the item into the database
+    const result = await orderCollection.insertOne(orderItem);
+   res.send(result)
+    // Respond with success message
+    // res.status(201).json({ 
+    //   message: "order successfully!", 
+    //   itemId: result.insertedId 
+    // });
+  } catch (error) {
+    console.error("Error order:", error);
+    res.status(500).json({ message: "Failed to order" });
+  }
+});
+app.get("/api/products", async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // ডাটাবেস থেকে প্রোডাক্ট ফেচ
+    const products = await productCollection.find().skip(skip).limit(limit).toArray();
+    const totalProducts = await productCollection.countDocuments(); // মোট প্রোডাক্ট সংখ্যা
+
+    // রেসপন্স পাঠানো
+    res.json({
+      success: true,
+      page,
+      limit,
+      totalProducts,
+      products,
+    });
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch products. Please try again later.",
+    });
+  }
+});
+
+app.get("/orders", async (req, res) => {
+  const email = req.query.email; // Extract email from query parameters
+  if (!email) {
+    return res.status(400).json({ message: "Email is required" });
+  }
+  try {
+    const query = { BuyerEmail: email }; // Match documents where `userEmail` matches
+    const result = await orderCollection.find(query).toArray(); // Fetch all matching documents
+    res.send(result); // Return as a list
+  } catch (error) {
+    console.error("Failed to fetch cart items:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+app.get("/order", async (req, res) => {
+  const email = req.query.email; // Extract email from query parameters
+  if (!email) {
+    return res.status(400).json({ message: "Email is required" });
+  }
+  try {
+    const query = { sellerEmail: email }; // Match documents where `userEmail` matches
+    const result = await orderCollection.find(query).toArray(); // Fetch all matching documents
+    res.send(result); // Return as a list
+  } catch (error) {
+    console.error("Failed to fetch cart items:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+app.put("/order/:id", async (req, res) => {
+  const id = req.params.id; // Order ID from request params
+  const { Status } = req.body; // Status from request body
+
+  // Validate ObjectId
+  if (!ObjectId.isValid(id)) {
+    return res.status(400).send({ message: "Invalid order ID" });
+  }
+
+  // Validate Status
+  const allowedStatuses = ["Confirmed", "Pending", "Canceled"];
+  if (!Status || !allowedStatuses.includes(Status)) {
+    return res
+      .status(400)
+      .send({ message: "Valid status is required ('Confirmed', 'Pending', 'Canceled')" });
+  }
+
+  try {
+    const filter = { _id: new ObjectId(id) }; // MongoDB filter for the document
+    const updateDoc = { $set: { Status } }; // Document fields to update
+
+    // Update the order in the database
+    const result = await orderCollection.updateOne(filter, updateDoc);
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).send({
+        message: "No changes made. Either the order was not found or already up-to-date.",
+      });
+    }
+
+    res.status(200).send({
+      message: "Order status updated successfully",
+      updatedId: id,
+      modifiedCount: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error("Error updating order status:", error);
+    res.status(500).send({
+      message: "Failed to update order status",
+      error: error.message,
+    });
   }
 });
 
@@ -271,8 +445,13 @@ app.post("/addToCart", async (req, res) => {
     res.send(result)
     })
   //  all product api 
-  app.get('/products/', async(req,res)=>{
+  app.get('/products', async(req,res)=>{
     const cursor = productCollection.find()
+    const result = await cursor.toArray()
+    res.send(result)
+  })
+  app.get('/orderes', async(req,res) =>{
+    const cursor = orderCollection.find()
     const result = await cursor.toArray()
     res.send(result)
   })
@@ -307,14 +486,18 @@ app.post("/addToCart", async (req, res) => {
       }
     });
     app.delete("/carts/:id", async(req,res)=>{
-      const id = req.params.id;
-      if (!ObjectId.isValid(id)) {
-        return res.status(400).send({ error: "Invalid ID format" });
-      }
-      const query = { _id: new ObjectId(id) };
-      const result = await cardCollection.deleteOne(query);
-      res.send(result);
+   const id = req.params.id;
+if (!ObjectId.isValid(id)) {
+  return res.status(400).send({ error: "Invalid ID format" });
+}
+const query = { _id: new ObjectId(id) };
+const result = await cardCollection.deleteOne(query);
+res.send(result);
      })
+
+
+// Delete a user
+
     await client.connect();
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
